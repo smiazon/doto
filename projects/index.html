@@ -237,6 +237,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .back:active{background:var(--rule)}
 .back[hidden]{display:none}
 .top.has-back .lamp{left:calc(var(--padx) + 2.1rem)}
+/* hold a row to rename it: the text becomes a line you can write on */
+.swipe,.sec-head{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.held .t,.held .name{color:var(--soft);transition:color .3s}
+.edit-in{display:flex;flex:1;align-items:center;gap:.9rem;cursor:text}
+.edit-in input{flex:1;min-width:0;border:0;background:none;padding:.75rem 0;min-height:3rem;-webkit-user-select:text;user-select:text}
+.edit-in input:focus{outline:none}
+.row.editing,.sec-head.editing{border-bottom-style:dashed;border-bottom-color:var(--soft)}
+.shelf-list .edit-in input{padding:.95rem 0}
+.sec-head .edit-in input{font-style:italic;font-size:1.12rem;padding:.35rem 0 .55rem;min-height:0}
 </style>
 </head>
 <body>
@@ -544,6 +553,35 @@ function swipeable(li, { left, right }) {
   li.addEventListener('pointerup', end); li.addEventListener('pointercancel', end);
 }
 
+/* hold a row to rename it; tapping still does what it always did */
+function renamable(row, marker, get, set) {
+  let t = 0, x0 = 0, y0 = 0, held = false;
+  const stop = () => { clearTimeout(t); row.classList.remove('held'); };
+  row.addEventListener('pointerdown', e => {
+    if (e.button) return; x0 = e.clientX; y0 = e.clientY; held = false; stop();
+    t = setTimeout(() => { held = true; row.classList.add('held'); buzz(8); }, 480);
+  });
+  row.addEventListener('pointermove', e => { if (!held && Math.hypot(e.clientX - x0, e.clientY - y0) > 8) stop(); });
+  // open from the click that follows: iOS only brings up the keyboard from a tap, not a timer
+  const open = () => { if (held) { held = false; edit(); } };
+  row.addEventListener('pointerup', () => { clearTimeout(t); if (held) setTimeout(open, 80); });
+  row.addEventListener('pointercancel', () => { held = false; stop(); });
+  row.addEventListener('click', e => { if (held) { e.stopPropagation(); e.preventDefault(); open(); } }, true);
+  row.addEventListener('contextmenu', e => e.preventDefault());
+  function edit() {
+    const lab = el('label', 'edit-in'), input = el('input');
+    input.value = get(); input.autocomplete = 'off'; input.enterKeyHint = 'done'; input.setAttribute('aria-label', 'Rename');
+    let over = false;
+    const finish = keep => { if (over) return; over = true; const v = input.value.trim(); if (keep && v && v !== get()) { set(v); save(); } render(); };
+    input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') finish(false); };
+    input.onblur = () => finish(true);
+    if (marker) lab.append(marker());
+    lab.append(input);
+    row.classList.remove('held'); row.classList.add('editing'); row.replaceChildren(lab);
+    input.focus(); input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+
 /* pies: the project as one big dot, each task as a small one */
 const CIRC = 2 * Math.PI * 6.5;
 const PIE_SVG = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle class="pie-rim" cx="16" cy="16" r="14.5"/><circle class="pie-fill" cx="16" cy="16" r="6.5"/></svg>';
@@ -587,6 +625,7 @@ function renderShelf(box) {
     li.append(b, el('span', 'pr-pct', allTasks(pr).length ? pctText(f) : ''));
     if (f === 1 && allTasks(pr).length) li.classList.add('done');
     swipeable(li, { left: () => { confirmDel = pr.id; render(); } });
+    renamable(li, () => qdot(f), () => pr.name, v => pr.name = v);
     ul.append(li);
   });
   ul.append(ghost(name => { state.projects.push({ id: uid(), name, created: dayKey(), closed: false, tasks: [] }); save(); render(); }, 'Add a project'));
@@ -611,6 +650,7 @@ function taskRow(owner, t, pr, onChange) {
   const del = () => { owner.tasks = owner.tasks.filter(o => o !== t); save(); render(); };
   li.append(b, iconBtn('del', 'Delete: ' + t.text, del));
   swipeable(li, { left: del });
+  renamable(li, () => qdot(t.p / 4), () => t.text, v => t.text = v);
   return li;
 }
 
@@ -652,6 +692,7 @@ function renderProject(box) {
     hb.onclick = () => { sec.collapsed = !sec.collapsed; save(); render(); };
     h.append(hb);
     swipeable(h, { left: () => { confirmSec = sec.id; render(); } });
+    renamable(h, null, () => sec.name, v => sec.name = v);
     wrap.append(h);
     if (!sec.collapsed) {
       const sul = el('ul', 'list proj');

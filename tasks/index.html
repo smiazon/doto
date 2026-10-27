@@ -197,6 +197,15 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .up:hover{color:var(--ink)}
 .up:active{background:var(--rule)}
 .top.has-back .lamp{left:calc(var(--padx) + 2.1rem)}
+/* hold a row to rename it: the text becomes a line you can write on */
+.swipe,.sec-head{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.held .t,.held .name{color:var(--soft);transition:color .3s}
+.edit-in{display:flex;flex:1;align-items:center;gap:.9rem;cursor:text}
+.edit-in input{flex:1;min-width:0;border:0;background:none;padding:.75rem 0;min-height:3rem;-webkit-user-select:text;user-select:text}
+.edit-in input:focus{outline:none}
+.row.editing,.sec-head.editing{border-bottom-style:dashed;border-bottom-color:var(--soft)}
+.today .row:first-child .edit-in input{font-size:1.3rem;line-height:1.3;padding:1rem 0}
+.later .edit-in{gap:1.1rem}
 </style>
 </head>
 <body>
@@ -508,6 +517,35 @@ function swipeable(li, { left, right }) {
   li.addEventListener('pointerup', end); li.addEventListener('pointercancel', end);
 }
 
+/* hold a row to rename it; tapping still does what it always did */
+function renamable(row, marker, get, set) {
+  let t = 0, x0 = 0, y0 = 0, held = false;
+  const stop = () => { clearTimeout(t); row.classList.remove('held'); };
+  row.addEventListener('pointerdown', e => {
+    if (e.button) return; x0 = e.clientX; y0 = e.clientY; held = false; stop();
+    t = setTimeout(() => { held = true; row.classList.add('held'); buzz(8); }, 480);
+  });
+  row.addEventListener('pointermove', e => { if (!held && Math.hypot(e.clientX - x0, e.clientY - y0) > 8) stop(); });
+  // open from the click that follows: iOS only brings up the keyboard from a tap, not a timer
+  const open = () => { if (held) { held = false; edit(); } };
+  row.addEventListener('pointerup', () => { clearTimeout(t); if (held) setTimeout(open, 80); });
+  row.addEventListener('pointercancel', () => { held = false; stop(); });
+  row.addEventListener('click', e => { if (held) { e.stopPropagation(); e.preventDefault(); open(); } }, true);
+  row.addEventListener('contextmenu', e => e.preventDefault());
+  function edit() {
+    const lab = el('label', 'edit-in'), input = el('input');
+    input.value = get(); input.autocomplete = 'off'; input.enterKeyHint = 'done'; input.setAttribute('aria-label', 'Rename');
+    let over = false;
+    const finish = keep => { if (over) return; over = true; const v = input.value.trim(); if (keep && v && v !== get()) { set(v); save(); } render(); };
+    input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') finish(false); };
+    input.onblur = () => finish(true);
+    if (marker) lab.append(marker());
+    lab.append(input);
+    row.classList.remove('held'); row.classList.add('editing'); row.replaceChildren(lab);
+    input.focus(); input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+
 /* the day as one big dot: it fills in as tasks are done */
 const pie = el('button', 'pie');
 pie.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle class="pie-rim" cx="16" cy="16" r="14.5"/><circle class="pie-fill" cx="16" cy="16" r="6.5"/></svg><span class="pct" aria-live="polite"></span>';
@@ -547,7 +585,10 @@ function renderDay(box) {
       if (canFold()) setTimeout(invite, 500); else { inviteTimers.forEach(clearTimeout); syncGrip(); settle(); }
     };
     li.append(b);
-    if (!d.closed) { li.append(iconBtn('later', 'Send to Later: ' + t.text, () => toLater(t))); swipeable(li, { left: () => toLater(t) }); }
+    if (!d.closed) {
+      li.append(iconBtn('later', 'Send to Later: ' + t.text, () => toLater(t))); swipeable(li, { left: () => toLater(t) });
+      renamable(li, () => { const m = el('span', 'dot'); m.setAttribute('aria-hidden', 'true'); return m; }, () => t.text, v => t.text = v);
+    }
     ul.append(li);
   });
   if (!d.closed) ul.append(ghost(text => { d.tasks.push({ id: uid(), text, done: false }); save(); render(); }, 'Add a task'));
@@ -567,6 +608,7 @@ function renderLater(box) {
     const li = el('li', 'row');
     li.append(todayOpen ? iconBtn('back', 'Move to today: ' + t.text, () => back(t)) : el('span', 'icon back'), el('span', 't', t.text), iconBtn('del', 'Delete: ' + t.text, () => del(t)));
     swipeable(li, { right: todayOpen ? () => back(t) : null, left: () => del(t) });
+    renamable(li, () => el('span', 'icon back'), () => t.text, v => t.text = v);
     ul.append(li);
   });
   ul.append(ghost(text => { state.later.push({ id: uid(), text }); save(); render(); }, 'Add a task to Later'));

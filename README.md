@@ -5,6 +5,8 @@ Two small task apps set like the pages of a book.
 - **Tasks** (`/tasks`): today's list. Tick everything off, then fold the corner of the page to finish the day. Unfinished tasks can wait in Later.
 - **Projects** (`/projects`): long-running projects with sections. Each task fills in a quarter at a time. Fold a finished project away to the Finished shelf.
 
+Press and hold a task, project or section to rename it. Enter saves, Escape cancels.
+
 Plain HTML, CSS and JavaScript. No build step, no dependencies besides the Literata font from Google Fonts.
 
 ## Your data

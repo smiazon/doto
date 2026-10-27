@@ -1,5 +1,5 @@
 // Offline support: pages come from the network when it's there, from the cache when it isn't.
-const CACHE = 'doto-v1';
+const CACHE = 'doto-v2';
 const CORE = ['./', './tasks/', './projects/', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
